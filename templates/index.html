@@ -9,52 +9,179 @@
       list-style: none;
       padding: 0;
       margin: 0;
-      /* width: 300px; */
+      width: 300px;
     }
     li {
+      clear: both;
+    }
+    li button{
       -webkit-appearance: none;
       border: none;
       outline: none;
       color: red;
-      /* float: right; */
+      float: right;
       cursor: pointer;
       font-size: 20px;
     }
     .lists-wrapper, .todos-wrapper{
-      /* display: inline-block; */
+      display: inline-block;
       vertical-align: top;
     }
   </style>
 </head>
 <body>
-  <!-- <div class="lists-wrapper">
-    <ul id = "lists">
+
+  <div class="lists-wrapper">
+    <form id="form-lists" method="POST" action="/lists/create">
+      <input type="text" name="name" id="name"/>
+      <input type="submit" value="Create" />
+    </form>
+    <div id="error-lists" class="hidden">Something went wrong!</div>
+    <ul id="lists">
       {% for list in lists %}
-      <li>
-        <a href="/lists/{{ list.id }}">
-          {{ list.name }}
-        </a>
-      </li>
+        <li>
+          <input class="check-completed-lists" data-id="{{ list.id }}" type="checkbox" {% if list.completed %} checked {% endif %}/>
+          <a href="/lists/{{list.id}}"> {{list.name}}</a>
+          <button class="delete-list" data-id="{{ list.id }}" >&cross;</button>
+        </li>
       {% endfor %}
     </ul>
-  </div> -->
+  </div>
   <div class="todos-wrapper">
-    <h4> Active List </h4>
-    <form id="form">
+    <h4>{{ active_list.name }}</h4>
+    <form id="form" method="POST" action="/todos/create">
       <input type="text" name="description" id="description"/>
       <input type="submit" value="Create" />
     </form>
     <div id="error" class="hidden">Something went wrong!</div>
     <ul id="todos">
-      {% for d in data %}
-        <li><input class="check-completed" data-id="{{ d.id }}" type="checkbox" {% if d.completed %} checked {% endif %}/>
-          {{d.description}}
+      {% for todo in todos %}
+        <li>
+          <input class="check-completed" data-id="{{ todo.id }}" type="checkbox" {% if todo.completed %} checked {% endif %}/>
+          {{todo.description}}
+          <button class="delete-todo" data-id="{{ todo.id }}" >&cross;</button>
         </li>
       {% endfor %}
     </ul>
   </div>
 
   <script>
+
+    const delete_buttons_list = document.querySelectorAll('.delete-list');
+    for (let i = 0; i < delete_buttons_list.length; i++){
+      const delete_button_list = delete_buttons_list[i];
+      delete_button_list.onclick = function(e){
+        console.log('event',e);
+        const listId = e.target.dataset['id'];
+        fetch('/lists/' + listId + '/delete', {
+          method:'DELETE'
+        })
+        .then(function(){
+          document.getElementById('error-lists').className = 'hidden';
+          const item = e.target.parentElement;
+          item.remove();
+        })
+        .catch(function(){
+          document.getElementById('error-lists').className = '';
+        })
+      }
+    }
+
+
+    const checkboxes_lists = document.querySelectorAll('.check-completed-lists');
+    for (let i = 0; i < checkboxes_lists.length; i++){
+      const checkbox_list = checkboxes_lists[i];
+      checkbox_list.onchange = function(e){
+        console.log('event',e);
+        const newCompleted = e.target.checked;
+        const listId = e.target.dataset['id'];
+        fetch('/lists/' + listId + '/set-completed', {
+          method:'POST',
+          body: JSON.stringify({
+            'completed': newCompleted
+          }),
+          headers:{
+            'Content-Type': 'application/json'
+          }
+        })
+        .then(function(){
+          document.getElementById('error').className = 'hidden';
+        })
+        .catch(function(){
+          document.getElementById('error').className = '';
+        })
+      }
+    }
+
+    const nameInput = document.getElementById('name');
+    document.getElementById('form-lists').onsubmit = function(e) {
+      e.preventDefault();
+      const name = nameInput.value;
+      nameInput.value = '';
+      fetch('/lists/create', {
+        method:'POST',
+        body:JSON.stringify({
+          'name': name
+        }),
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+      .then(function(response) {
+        console.log(response.json);
+        return response.json();
+      })
+      .then(function(jsonResponse){
+        console.log(jsonResponse);
+        const liItem = document.createElement('li');
+        const checkbox = document.createElement('input');
+        checkbox.className = 'check-completed-lists';
+        checkbox.type = 'checkbox';
+        checkbox.setAttribute('data-id', jsonResponse.id)
+        liItem.appendChild(checkbox);
+
+        const link = document.createTextNode(' ' + jsonResponse.name);
+        const a = document.createElement('a');
+        a.appendChild(link);
+        a.href = "/lists/"+ jsonResponse.id;
+        liItem.appendChild(a);
+
+        const delete_button = document.createElement('button');
+        delete_button.className = 'delete-list';
+        delete_button.setAttribute('data-id', jsonResponse.id);
+        delete_button.innerHTML = '&cross;';
+        liItem.appendChild(delete_button);
+
+        document.getElementById('lists').appendChild(liItem);
+        document.getElementById('error-lists').className = 'hidden';
+      })
+      .catch(function(){
+        console.error('Error occurred')
+        document.getElementById('error-lists').className = '';
+      })
+    }
+
+
+    const delete_buttons = document.querySelectorAll('.delete-todo');
+    for (let i = 0; i < delete_buttons.length; i++){
+      const delete_button = delete_buttons[i];
+      delete_button.onclick = function(e){
+        console.log('event',e);
+        const todoId = e.target.dataset['id'];
+        fetch('/todos/' + todoId + '/delete-todo', {
+          method:'DELETE'
+        })
+        .then(function(){
+          document.getElementById('error').className = 'hidden';
+          const item = e.target.parentElement;
+          item.remove();
+        })
+        .catch(function(){
+          document.getElementById('error').className = '';
+        })
+      }
+    }
+
 
     const checkboxes = document.querySelectorAll('.check-completed');
     for (let i = 0; i < checkboxes.length; i++){
@@ -81,12 +208,16 @@
       }
     }
 
+    const descInput = document.getElementById('description');
     document.getElementById('form').onsubmit = function(e) {
       e.preventDefault();
+      const desc = descInput.value;
+      descInput.value = '';
       fetch('/todos/create', {
         method:'POST',
         body:JSON.stringify({
-          'description': document.getElementById('description').value
+          'description': desc,
+          'list_id': {{ active_list.id }}
         }),
         headers: {
           'Content-Type': 'application/json'
@@ -97,12 +228,27 @@
       })
       .then(function(jsonResponse){
         console.log(jsonResponse);
-        const liItem = document.createElement('LI');
-        liItem.innerHTML = jsonResponse['description'];
-        document.getElementById('todos').appendChild(liItem);
-        document.getElementById('error').className = 'hidden';
+        const liItem = document.createElement('li');
+        const checkbox = document.createElement('input');
+        checkbox.className = 'check-completed';
+        checkbox.type = 'checkbox';
+        checkbox.setAttribute('data-id', jsonResponse.id)
+        liItem.appendChild(checkbox);
+
+         const text = document.createTextNode(' ' + jsonResponse.description);
+         liItem.appendChild(text);
+
+         const delete_button = document.createElement('button');
+         delete_button.className = 'delete-todo';
+         delete_button.setAttribute('data-id', jsonResponse.id);
+         delete_button.innerHTML = '&cross;';
+         liItem.appendChild(delete_button);
+
+         document.getElementById('todos').appendChild(liItem);
+         document.getElementById('error').className = 'hidden';
       })
       .catch(function(){
+        console.error('Error occurred')
         document.getElementById('error').className = '';
       })
     }
